@@ -1,0 +1,302 @@
+<?php
+// CONFIGURACIÓN DE CONEXIÓN A BASE DE DATOS
+define('DB_HOST', 'localhost');
+define('DB_USER', 'root');
+define('DB_PASS', '');
+define('DB_NAME', 'tienda_frenos');
+
+// Conexión
+try {
+    $conn = new mysqli(DB_HOST, DB_USER, DB_PASS, DB_NAME);
+    $conn->set_charset("utf8");
+    
+    if ($conn->connect_error) {
+        throw new Exception("Error de conexión: " . $conn->connect_error);
+    }
+} catch (Exception $e) {
+    http_response_code(500);
+    echo json_encode(['error' => $e->getMessage()]);
+    exit;
+}
+
+// CONFIGURAR HEADERS
+header('Content-Type: application/json; charset=utf-8');
+header('Access-Control-Allow-Origin: *');
+header('Access-Control-Allow-Methods: GET, POST, PUT, DELETE');
+header('Access-Control-Allow-Headers: Content-Type');
+
+// OBTENER MÉTODO Y ACCIÓN
+$method = $_SERVER['REQUEST_METHOD'];
+$action = isset($_GET['action']) ? $_GET['action'] : '';
+
+// FUNCIONES DE BASE DE DATOS
+
+// 1. Obtener todos los productos
+function obtenerProductos($filtros = []) {
+    global $conn;
+    
+    $query = "SELECT p.*, c.nombre as categoria 
+              FROM productos p 
+              LEFT JOIN categorias c ON p.id_categoria = c.id_categoria 
+              WHERE p.activo = TRUE";
+    
+    if (!empty($filtros['categoria'])) {
+        $categoria = $conn->real_escape_string($filtros['categoria']);
+        $query .= " AND c.nombre LIKE '%$categoria%'";
+    }
+    
+    if (!empty($filtros['busqueda'])) {
+        $busqueda = $conn->real_escape_string($filtros['busqueda']);
+        $query .= " AND (p.nombre LIKE '%$busqueda%' OR p.codigo_parte LIKE '%$busqueda%')";
+    }
+    
+    if (!empty($filtros['marca'])) {
+        $marca = (int)$filtros['marca'];
+        $query .= " AND p.id_producto IN (
+                    SELECT id_producto FROM compatibilidad_producto_modelo 
+                    JOIN modelos_auto ON compatibilidad_producto_modelo.id_modelo = modelos_auto.id_modelo 
+                    WHERE modelos_auto.id_marca = $marca)";
+    }
+    
+    $query .= " ORDER BY p.fecha_actualizacion DESC LIMIT 50";
+    
+    $result = $conn->query($query);
+    $productos = [];
+    
+    if ($result->num_rows > 0) {
+        while ($row = $result->fetch_assoc()) {
+            $productos[] = $row;
+        }
+    }
+    
+    return $productos;
+}
+
+// 2. Obtener producto por ID
+function obtenerProductoPorId($id) {
+    global $conn;
+    
+    $id = (int)$id;
+    $query = "SELECT p.*, c.nombre as categoria 
+              FROM productos p 
+              LEFT JOIN categorias c ON p.id_categoria = c.id_categoria 
+              WHERE p.id_producto = $id AND p.activo = TRUE";
+    
+    $result = $conn->query($query);
+    return $result->fetch_assoc();
+}
+
+// 3. Obtener productos por compatibilidad de vehículo
+function obtenerProductosPorVehiculo($id_modelo, $tipo_repuesto = '') {
+    global $conn;
+    
+    $id_modelo = (int)$id_modelo;
+    
+    $query = "SELECT DISTINCT p.*, c.nombre as categoria, cpm.posicion
+              FROM productos p
+              LEFT JOIN categorias c ON p.id_categoria = c.id_categoria
+              LEFT JOIN compatibilidad_producto_modelo cpm ON p.id_producto = cpm.id_producto
+              WHERE cpm.id_modelo = $id_modelo AND p.activo = TRUE";
+    
+    if (!empty($tipo_repuesto)) {
+        $tipo = $conn->real_escape_string($tipo_repuesto);
+        $query .= " AND c.nombre LIKE '%$tipo%'";
+    }
+    
+    $query .= " ORDER BY c.nombre, p.nombre";
+    
+    $result = $conn->query($query);
+    $productos = [];
+    
+    if ($result->num_rows > 0) {
+        while ($row = $result->fetch_assoc()) {
+            $productos[] = $row;
+        }
+    }
+    
+    return $productos;
+}
+
+// 4. Obtener categorías
+function obtenerCategorias() {
+    global $conn;
+    
+    $query = "SELECT * FROM categorias WHERE activa = TRUE ORDER BY nombre";
+    $result = $conn->query($query);
+    $categorias = [];
+    
+    if ($result->num_rows > 0) {
+        while ($row = $result->fetch_assoc()) {
+            $categorias[] = $row;
+        }
+    }
+    
+    return $categorias;
+}
+
+// 5. Obtener marcas de autos
+function obtenerMarcas() {
+    global $conn;
+    
+    $query = "SELECT id_marca, nombre FROM marcas_auto WHERE activa = TRUE ORDER BY nombre";
+    $result = $conn->query($query);
+    $marcas = [];
+    
+    if ($result->num_rows > 0) {
+        while ($row = $result->fetch_assoc()) {
+            $marcas[] = $row;
+        }
+    }
+    
+    return $marcas;
+}
+
+// 6. Obtener modelos por marca
+function obtenerModelosPorMarca($id_marca) {
+    global $conn;
+    
+    $id_marca = (int)$id_marca;
+    
+    $query = "SELECT id_modelo, nombre, año_desde, año_hasta 
+              FROM modelos_auto 
+              WHERE id_marca = $id_marca AND activa = TRUE 
+              ORDER BY nombre";
+    
+    $result = $conn->query($query);
+    $modelos = [];
+    
+    if ($result->num_rows > 0) {
+        while ($row = $result->fetch_assoc()) {
+            $modelos[] = $row;
+        }
+    }
+    
+    return $modelos;
+}
+
+// 7. Buscar productos
+function buscarProductos($busqueda) {
+    global $conn;
+    
+    $busqueda = $conn->real_escape_string($busqueda);
+    
+    $query = "SELECT p.*, c.nombre as categoria 
+              FROM productos p 
+              LEFT JOIN categorias c ON p.id_categoria = c.id_categoria 
+              WHERE p.activo = TRUE AND (
+                  p.nombre LIKE '%$busqueda%' 
+                  OR p.codigo_parte LIKE '%$busqueda%' 
+                  OR p.descripcion LIKE '%$busqueda%'
+              ) 
+              LIMIT 50";
+    
+    $result = $conn->query($query);
+    $productos = [];
+    
+    if ($result->num_rows > 0) {
+        while ($row = $result->fetch_assoc()) {
+            $productos[] = $row;
+        }
+    }
+    
+    return $productos;
+}
+
+// 8. Crear pedido
+function crearPedido($id_cliente, $items, $total) {
+    global $conn;
+    
+    $id_cliente = (int)$id_cliente;
+    $total = (float)$total;
+    $numero_orden = 'ORD-' . date('YmdHis');
+    
+    $query = "INSERT INTO ordenes (numero_orden, id_cliente, total, estado) 
+              VALUES ('$numero_orden', $id_cliente, $total, 'pendiente')";
+    
+    if ($conn->query($query)) {
+        $id_orden = $conn->insert_id;
+        
+        // Insertar detalles
+        foreach ($items as $item) {
+            $id_producto = (int)$item['id_producto'];
+            $cantidad = (int)$item['cantidad'];
+            $precio = (float)$item['precio'];
+            $subtotal = $cantidad * $precio;
+            
+            $query = "INSERT INTO detalles_orden (id_orden, id_producto, cantidad, precio_unitario, subtotal) 
+                      VALUES ($id_orden, $id_producto, $cantidad, $precio, $subtotal)";
+            
+            $conn->query($query);
+        }
+        
+        return ['id_orden' => $id_orden, 'numero_orden' => $numero_orden];
+    }
+    
+    return false;
+}
+
+// RUTAS DE LA API
+
+try {
+    switch ($action) {
+        case 'productos':
+            echo json_encode(obtenerProductos($_GET));
+            break;
+            
+        case 'producto':
+            if (isset($_GET['id'])) {
+                $producto = obtenerProductoPorId($_GET['id']);
+                if ($producto) {
+                    echo json_encode($producto);
+                } else {
+                    http_response_code(404);
+                    echo json_encode(['error' => 'Producto no encontrado']);
+                }
+            }
+            break;
+            
+        case 'productos_vehiculo':
+            if (isset($_GET['modelo'])) {
+                $tipo = isset($_GET['tipo']) ? $_GET['tipo'] : '';
+                echo json_encode(obtenerProductosPorVehiculo($_GET['modelo'], $tipo));
+            }
+            break;
+            
+        case 'categorias':
+            echo json_encode(obtenerCategorias());
+            break;
+            
+        case 'marcas':
+            echo json_encode(obtenerMarcas());
+            break;
+            
+        case 'modelos':
+            if (isset($_GET['marca'])) {
+                echo json_encode(obtenerModelosPorMarca($_GET['marca']));
+            }
+            break;
+            
+        case 'buscar':
+            if (isset($_GET['q'])) {
+                echo json_encode(buscarProductos($_GET['q']));
+            }
+            break;
+            
+        case 'crear_pedido':
+            if ($method === 'POST') {
+                $datos = json_decode(file_get_contents('php://input'), true);
+                $resultado = crearPedido($datos['cliente'], $datos['items'], $datos['total']);
+                echo json_encode($resultado);
+            }
+            break;
+            
+        default:
+            echo json_encode(['error' => 'Acción no especificada']);
+    }
+} catch (Exception $e) {
+    http_response_code(500);
+    echo json_encode(['error' => $e->getMessage()]);
+}
+
+$conn->close();
+?>
