@@ -1,0 +1,214 @@
+-- BASE DE DATOS PARA TIENDA DE REPUESTOS DE FRENOS
+-- Crear la base de datos
+CREATE DATABASE IF NOT EXISTS tienda_frenos;
+USE tienda_frenos;
+
+-- TABLA DE CATEGORÍAS
+CREATE TABLE categorias (
+    id_categoria INT PRIMARY KEY AUTO_INCREMENT,
+    nombre VARCHAR(100) NOT NULL,
+    descripcion TEXT,
+    imagen_url VARCHAR(255),
+    activa BOOLEAN DEFAULT TRUE
+);
+
+-- TABLA DE MARCAS DE AUTOS
+CREATE TABLE marcas_auto (
+    id_marca INT PRIMARY KEY AUTO_INCREMENT,
+    nombre VARCHAR(100) NOT NULL,
+    descripcion TEXT,
+    logo_url VARCHAR(255),
+    activa BOOLEAN DEFAULT TRUE
+);
+
+-- TABLA DE MODELOS DE AUTOS
+CREATE TABLE modelos_auto (
+    id_modelo INT PRIMARY KEY AUTO_INCREMENT,
+    id_marca INT NOT NULL,
+    nombre VARCHAR(100) NOT NULL,
+    año_desde INT,
+    año_hasta INT,
+    descripcion TEXT,
+    activa BOOLEAN DEFAULT TRUE,
+    FOREIGN KEY (id_marca) REFERENCES marcas_auto(id_marca)
+);
+
+-- TABLA DE PRODUCTOS
+CREATE TABLE productos (
+    id_producto INT PRIMARY KEY AUTO_INCREMENT,
+    id_categoria INT NOT NULL,
+    nombre VARCHAR(150) NOT NULL,
+    descripcion TEXT,
+    descripcion_larga TEXT,
+    especificaciones TEXT,
+    precio_compra DECIMAL(10, 2),
+    precio_venta DECIMAL(10, 2) NOT NULL,
+    precio_promocion DECIMAL(10, 2),
+    codigo_parte VARCHAR(100) UNIQUE,
+    sku VARCHAR(100) UNIQUE,
+    imagen_principal VARCHAR(255),
+    imagenes_adicionales TEXT,
+    cantidad_stock INT DEFAULT 0,
+    stock_minimo INT DEFAULT 5,
+    material VARCHAR(100),
+    peso DECIMAL(8, 2),
+    activo BOOLEAN DEFAULT TRUE,
+    fecha_creacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    fecha_actualizacion TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    FOREIGN KEY (id_categoria) REFERENCES categorias(id_categoria),
+    INDEX idx_categoria (id_categoria),
+    INDEX idx_codigo (codigo_parte)
+);
+
+-- TABLA DE COMPATIBILIDAD PRODUCTO-MODELO
+CREATE TABLE compatibilidad_producto_modelo (
+    id_compatibilidad INT PRIMARY KEY AUTO_INCREMENT,
+    id_producto INT NOT NULL,
+    id_modelo INT NOT NULL,
+    posicion VARCHAR(50), -- "Delantera Izquierda", "Trasera", etc.
+    numero_ejes INT,
+    cilindro_rueda DECIMAL(8, 2),
+    observaciones TEXT,
+    FOREIGN KEY (id_producto) REFERENCES productos(id_producto),
+    FOREIGN KEY (id_modelo) REFERENCES modelos_auto(id_modelo),
+    UNIQUE KEY uq_producto_modelo (id_producto, id_modelo)
+);
+
+-- TABLA DE CLIENTES
+CREATE TABLE clientes (
+    id_cliente INT PRIMARY KEY AUTO_INCREMENT,
+    nombre VARCHAR(150) NOT NULL,
+    apellido VARCHAR(150),
+    email VARCHAR(100) UNIQUE,
+    telefono VARCHAR(20),
+    rfc VARCHAR(13),
+    razon_social VARCHAR(200),
+    tipo_cliente ENUM('persona_fisica', 'empresa') DEFAULT 'persona_fisica',
+    activo BOOLEAN DEFAULT TRUE,
+    fecha_registro TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- TABLA DE DIRECCIONES
+CREATE TABLE direcciones (
+    id_direccion INT PRIMARY KEY AUTO_INCREMENT,
+    id_cliente INT NOT NULL,
+    calle VARCHAR(150),
+    numero VARCHAR(20),
+    apartamento VARCHAR(20),
+    ciudad VARCHAR(100),
+    estado VARCHAR(100),
+    codigo_postal VARCHAR(10),
+    pais VARCHAR(100) DEFAULT 'México',
+    es_principal BOOLEAN DEFAULT FALSE,
+    tipo ENUM('envio', 'facturacion', 'ambas') DEFAULT 'ambas',
+    FOREIGN KEY (id_cliente) REFERENCES clientes(id_cliente)
+);
+
+-- TABLA DE ÓRDENES/PEDIDOS
+CREATE TABLE ordenes (
+    id_orden INT PRIMARY KEY AUTO_INCREMENT,
+    numero_orden VARCHAR(50) UNIQUE,
+    id_cliente INT NOT NULL,
+    fecha_orden TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    fecha_envio DATETIME,
+    fecha_entrega DATETIME,
+    estado ENUM('pendiente', 'procesando', 'enviado', 'entregado', 'cancelado') DEFAULT 'pendiente',
+    subtotal DECIMAL(10, 2),
+    impuesto DECIMAL(10, 2),
+    envio DECIMAL(10, 2),
+    total DECIMAL(10, 2) NOT NULL,
+    metodo_pago VARCHAR(50),
+    notas TEXT,
+    FOREIGN KEY (id_cliente) REFERENCES clientes(id_cliente),
+    INDEX idx_estado (estado),
+    INDEX idx_fecha (fecha_orden)
+);
+
+-- TABLA DE DETALLES DE ÓRDENES
+CREATE TABLE detalles_orden (
+    id_detalle INT PRIMARY KEY AUTO_INCREMENT,
+    id_orden INT NOT NULL,
+    id_producto INT NOT NULL,
+    cantidad INT NOT NULL,
+    precio_unitario DECIMAL(10, 2) NOT NULL,
+    subtotal DECIMAL(10, 2) NOT NULL,
+    FOREIGN KEY (id_orden) REFERENCES ordenes(id_orden),
+    FOREIGN KEY (id_producto) REFERENCES productos(id_producto)
+);
+
+-- TABLA DE RESEÑAS
+CREATE TABLE resenas (
+    id_resena INT PRIMARY KEY AUTO_INCREMENT,
+    id_producto INT NOT NULL,
+    id_cliente INT,
+    calificacion INT CHECK (calificacion >= 1 AND calificacion <= 5),
+    titulo VARCHAR(150),
+    comentario TEXT,
+    verificado_compra BOOLEAN DEFAULT FALSE,
+    fecha_resena TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    activa BOOLEAN DEFAULT TRUE,
+    FOREIGN KEY (id_producto) REFERENCIAS productos(id_producto),
+    FOREIGN KEY (id_cliente) REFERENCES clientes(id_cliente)
+);
+
+-- TABLA DE CUPONES/PROMOCIONES
+CREATE TABLE cupones (
+    id_cupon INT PRIMARY KEY AUTO_INCREMENT,
+    codigo VARCHAR(50) UNIQUE NOT NULL,
+    descripcion VARCHAR(200),
+    tipo ENUM('porcentaje', 'cantidad_fija') DEFAULT 'porcentaje',
+    valor DECIMAL(10, 2) NOT NULL,
+    cantidad_usos INT DEFAULT 0,
+    cantidad_usos_maxima INT,
+    monto_minimo DECIMAL(10, 2),
+    fecha_inicio DATETIME,
+    fecha_vencimiento DATETIME,
+    activo BOOLEAN DEFAULT TRUE
+);
+
+-- TABLA DE BÚSQUEDAS FRECUENTES
+CREATE TABLE busquedas (
+    id_busqueda INT PRIMARY KEY AUTO_INCREMENT,
+    marca VARCHAR(100),
+    modelo VARCHAR(100),
+    año INT,
+    tipo_repuesto VARCHAR(100),
+    cantidad_busquedas INT DEFAULT 1,
+    fecha_ultima_busqueda TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- INSERTAR CATEGORÍAS INICIALES
+INSERT INTO categorias (nombre, descripcion) VALUES
+('Balatas/Pastillas de Freno', 'Pastillas y balatas para sistemas de frenado de disco'),
+('Discos de Freno', 'Rotores de freno para sistemas de frenado de disco'),
+('Tambores y Zapatas', 'Tambores de freno y zapatas para sistemas de tambor'),
+('Cilindros de Rueda', 'Cilindros y componentes relacionados'),
+('Líquidos y Aditivos', 'Líquidos de freno y aditivos especializados');
+
+-- INSERTAR MARCAS DE AUTOS (EJEMPLO)
+INSERT INTO marcas_auto (nombre, descripcion) VALUES
+('Volkswagen', 'Autos Volkswagen'),
+('Nissan', 'Autos Nissan'),
+('Toyota', 'Autos Toyota'),
+('Chevrolet', 'Autos Chevrolet'),
+('Ford', 'Autos Ford'),
+('Honda', 'Autos Honda');
+
+-- EJEMPLO DE PRODUCTO
+INSERT INTO productos (
+    id_categoria, 
+    nombre, 
+    descripcion, 
+    precio_venta, 
+    codigo_parte, 
+    sku,
+    cantidad_stock
+) VALUES (
+    1,
+    'Balatas de Freno Volkswagen Golf - Delantera',
+    'Juego de balatas de freno para Volkswagen Golf',
+    450.00,
+    'VW-GOLF-BALATA-001',
+    'SKU-VW-GOLF-BAL-001',
+    50
+);
