@@ -1,0 +1,404 @@
+// SISTEMA DE CARRITO DE COMPRAS
+// Este archivo maneja toda la lógica del carrito en el navegador
+
+class CarritoCompras {
+    constructor() {
+        this.items = this.cargarCarrito();
+        this.moneda = 'MXN';
+    }
+
+    // Cargar carrito desde localStorage
+    cargarCarrito() {
+        const carritos = localStorage.getItem('carrito_tienda_frenos');
+        return carritos ? JSON.parse(carritos) : [];
+    }
+
+    // Guardar carrito en localStorage
+    guardarCarrito() {
+        localStorage.setItem('carrito_tienda_frenos', JSON.stringify(this.items));
+        this.actualizarUI();
+    }
+
+    // Agregar producto al carrito
+    agregarProducto(producto, cantidad = 1) {
+        if (!producto.id_producto) {
+            console.error('Producto inválido');
+            return false;
+        }
+
+        cantidad = parseInt(cantidad) || 1;
+
+        // Buscar si el producto ya existe en el carrito
+        const productoExistente = this.items.find(item => item.id_producto === producto.id_producto);
+
+        if (productoExistente) {
+            // Aumentar cantidad
+            productoExistente.cantidad += cantidad;
+            this.mostrarNotificacion(`Se aumentó la cantidad de ${producto.nombre}`);
+        } else {
+            // Agregar nuevo producto
+            this.items.push({
+                id_producto: producto.id_producto,
+                nombre: producto.nombre,
+                precio_venta: producto.precio_venta,
+                imagen: producto.imagen_principal,
+                codigo_parte: producto.codigo_parte,
+                cantidad: cantidad
+            });
+            this.mostrarNotificacion(`${producto.nombre} agregado al carrito`);
+        }
+
+        this.guardarCarrito();
+        return true;
+    }
+
+    // Eliminar producto del carrito
+    eliminarProducto(id_producto) {
+        this.items = this.items.filter(item => item.id_producto !== id_producto);
+        this.guardarCarrito();
+        this.mostrarNotificacion('Producto eliminado del carrito');
+    }
+
+    // Actualizar cantidad de producto
+    actualizarCantidad(id_producto, cantidad) {
+        cantidad = parseInt(cantidad);
+        
+        if (cantidad <= 0) {
+            this.eliminarProducto(id_producto);
+            return;
+        }
+
+        const item = this.items.find(i => i.id_producto === id_producto);
+        if (item) {
+            item.cantidad = cantidad;
+            this.guardarCarrito();
+        }
+    }
+
+    // Obtener total del carrito
+    obtenerTotal() {
+        return this.items.reduce((total, item) => {
+            return total + (item.precio_venta * item.cantidad);
+        }, 0);
+    }
+
+    // Obtener subtotal (sin impuestos)
+    obtenerSubtotal() {
+        return this.obtenerTotal();
+    }
+
+    // Obtener IVA (16% en México)
+    obtenerIVA() {
+        return this.obtenerSubtotal() * 0.16;
+    }
+
+    // Obtener total con impuestos
+    obtenerTotalConImpuestos() {
+        return this.obtenerSubtotal() + this.obtenerIVA();
+    }
+
+    // Obtener cantidad de artículos
+    obtenerCantidadArticulos() {
+        return this.items.reduce((total, item) => total + item.cantidad, 0);
+    }
+
+    // Vaciar carrito
+    vaciarCarrito() {
+        this.items = [];
+        this.guardarCarrito();
+        this.mostrarNotificacion('Carrito vaciado');
+    }
+
+    // Formatear dinero
+    formatearDinero(cantidad) {
+        return new Intl.NumberFormat('es-MX', {
+            style: 'currency',
+            currency: 'MXN'
+        }).format(cantidad);
+    }
+
+    // Mostrar notificación
+    mostrarNotificacion(mensaje) {
+        const notificacion = document.createElement('div');
+        notificacion.className = 'notificacion';
+        notificacion.textContent = mensaje;
+        notificacion.style.cssText = `
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            background-color: #4CAF50;
+            color: white;
+            padding: 1rem 1.5rem;
+            border-radius: 4px;
+            z-index: 1000;
+            animation: slideIn 0.3s ease-in-out;
+        `;
+
+        document.body.appendChild(notificacion);
+
+        setTimeout(() => {
+            notificacion.style.animation = 'slideOut 0.3s ease-in-out';
+            setTimeout(() => notificacion.remove(), 300);
+        }, 3000);
+    }
+
+    // Actualizar UI (contador, resumen)
+    actualizarUI() {
+        // Actualizar contador del carrito en header
+        const contador = document.getElementById('contador-carrito');
+        if (contador) {
+            contador.textContent = this.obtenerCantidadArticulos();
+        }
+
+        // Actualizar total en header si existe
+        const totalHeader = document.getElementById('total-carrito-header');
+        if (totalHeader) {
+            totalHeader.textContent = this.formatearDinero(this.obtenerTotal());
+        }
+
+        // Disparar evento personalizado
+        window.dispatchEvent(new CustomEvent('carritoActualizado', {
+            detail: {
+                items: this.items,
+                total: this.obtenerTotal()
+            }
+        }));
+    }
+
+    // Generar resumen para imprimir/enviar
+    generarResumen() {
+        let resumen = 'CARRITO DE COMPRAS - TIENDA DE FRENOS\n';
+        resumen += '=' .repeat(50) + '\n\n';
+        
+        this.items.forEach(item => {
+            resumen += `${item.nombre}\n`;
+            resumen += `Cantidad: ${item.cantidad} x ${this.formatearDinero(item.precio_venta)}\n`;
+            resumen += `Subtotal: ${this.formatearDinero(item.cantidad * item.precio_venta)}\n`;
+            resumen += '-' .repeat(50) + '\n';
+        });
+
+        resumen += '\n' + '=' .repeat(50) + '\n';
+        resumen += `Subtotal: ${this.formatearDinero(this.obtenerSubtotal())}\n`;
+        resumen += `IVA (16%): ${this.formatearDinero(this.obtenerIVA())}\n`;
+        resumen += `TOTAL: ${this.formatearDinero(this.obtenerTotalConImpuestos())}\n`;
+
+        return resumen;
+    }
+
+    // Exportar carrito a JSON
+    exportarCarrito() {
+        return JSON.stringify(this.items, null, 2);
+    }
+
+    // Validar carrito antes de checkout
+    validarCarrito() {
+        if (this.items.length === 0) {
+            return { valido: false, mensaje: 'El carrito está vacío' };
+        }
+
+        for (let item of this.items) {
+            if (!item.id_producto || !item.nombre || !item.precio_venta || item.cantidad <= 0) {
+                return { valido: false, mensaje: 'Carrito con datos inválidos' };
+            }
+        }
+
+        return { valido: true, mensaje: 'Carrito válido' };
+    }
+}
+
+// INICIALIZAR CARRITO GLOBAL
+let carrito = new CarritoCompras();
+
+// FUNCIONES DE UTILIDAD
+
+// Agregar producto desde página de producto
+function agregarAlCarrito(idProducto, nombre, precio, imagen, codigoParte) {
+    const cantidad = document.getElementById('cantidad-input')?.value || 1;
+    
+    const producto = {
+        id_producto: idProducto,
+        nombre: nombre,
+        precio_venta: precio,
+        imagen_principal: imagen,
+        codigo_parte: codigoParte
+    };
+
+    carrito.agregarProducto(producto, cantidad);
+}
+
+// Mostrar carrito en modal
+function mostrarCarrito() {
+    let html = '<div class="carrito-modal">';
+    html += '<h2>Tu Carrito</h2>';
+    
+    if (carrito.items.length === 0) {
+        html += '<p style="text-align: center; padding: 2rem;">El carrito está vacío</p>';
+    } else {
+        html += '<table class="tabla-carrito">';
+        html += '<tr><th>Producto</th><th>Cantidad</th><th>Precio</th><th>Subtotal</th><th></th></tr>';
+
+        carrito.items.forEach(item => {
+            const subtotal = item.cantidad * item.precio_venta;
+            html += `<tr>
+                <td>${item.nombre}</td>
+                <td><input type="number" value="${item.cantidad}" 
+                    onchange="carrito.actualizarCantidad(${item.id_producto}, this.value)" 
+                    style="width: 50px; padding: 0.25rem;"></td>
+                <td>${carrito.formatearDinero(item.precio_venta)}</td>
+                <td>${carrito.formatearDinero(subtotal)}</td>
+                <td><button onclick="carrito.eliminarProducto(${item.id_producto})" 
+                    style="background: #ff6b35; color: white; border: none; padding: 0.25rem 0.5rem; cursor: pointer;">×</button></td>
+            </tr>`;
+        });
+
+        html += '</table>';
+
+        // Resumen
+        html += '<div class="resumen-carrito">';
+        html += `<p>Subtotal: <strong>${carrito.formatearDinero(carrito.obtenerSubtotal())}</strong></p>`;
+        html += `<p>IVA (16%): <strong>${carrito.formatearDinero(carrito.obtenerIVA())}</strong></p>`;
+        html += `<p style="font-size: 1.3rem; color: #ff6b35;">TOTAL: <strong>${carrito.formatearDinero(carrito.obtenerTotalConImpuestos())}</strong></p>`;
+        html += '</div>';
+
+        html += '<div style="margin-top: 1rem;">';
+        html += '<button onclick="irACheckout()" style="background: #ff6b35; color: white; padding: 0.75rem 1.5rem; border: none; cursor: pointer; margin-right: 0.5rem;">Continuar Compra</button>';
+        html += '<button onclick="carrito.vaciarCarrito()" style="background: #999; color: white; padding: 0.75rem 1.5rem; border: none; cursor: pointer;">Vaciar Carrito</button>';
+        html += '</div>';
+    }
+
+    html += '</div>';
+
+    // Mostrar en modal o página
+    const modalElement = document.getElementById('carrito-modal-container');
+    if (modalElement) {
+        modalElement.innerHTML = html;
+        modalElement.style.display = 'block';
+    }
+}
+
+// Ir al checkout
+function irACheckout() {
+    const validacion = carrito.validarCarrito();
+    
+    if (!validacion.valido) {
+        alert(validacion.mensaje);
+        return;
+    }
+
+    window.location.href = '/checkout.html';
+}
+
+// Enviar carrito por WhatsApp
+function enviarPorWhatsapp() {
+    const resumen = carrito.generarResumen();
+    const numero = '5512345678'; // Cambiar por tu número
+    const texto = encodeURIComponent(resumen);
+    window.open(`https://wa.me/${numero}?text=${texto}`);
+}
+
+// Enviar carrito por email
+function enviarPorEmail() {
+    const resumen = carrito.generarResumen();
+    const email = 'ventas@tienda.com';
+    
+    fetch('/api/enviar-carrito.php', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            email: email,
+            carrito: carrito.items,
+            resumen: resumen
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            carrito.mostrarNotificacion('Carrito enviado por email');
+        }
+    });
+}
+
+// Escuchar cambios en el carrito desde otras pestañas
+window.addEventListener('storage', (e) => {
+    if (e.key === 'carrito_tienda_frenos') {
+        carrito = new CarritoCompras();
+        carrito.actualizarUI();
+    }
+});
+
+// Estilos CSS para notificaciones y modal
+const estilosCarrito = `
+<style>
+@keyframes slideIn {
+    from {
+        transform: translateX(400px);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+@keyframes slideOut {
+    from {
+        transform: translateX(0);
+        opacity: 1;
+    }
+    to {
+        transform: translateX(400px);
+        opacity: 0;
+    }
+}
+
+.carrito-modal {
+    background: white;
+    padding: 2rem;
+    border-radius: 8px;
+    max-width: 800px;
+    margin: 0 auto;
+}
+
+.tabla-carrito {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 1rem 0;
+}
+
+.tabla-carrito th, .tabla-carrito td {
+    padding: 1rem;
+    text-align: left;
+    border-bottom: 1px solid #ddd;
+}
+
+.tabla-carrito th {
+    background-color: #f5f5f5;
+    font-weight: bold;
+}
+
+.resumen-carrito {
+    text-align: right;
+    padding: 1rem;
+    background-color: #f9f9f9;
+    border-radius: 4px;
+    margin: 1rem 0;
+}
+
+.resumen-carrito p {
+    margin: 0.5rem 0;
+    font-size: 1.1rem;
+}
+</style>
+`;
+
+// Inyectar estilos si no existen
+if (!document.head.innerHTML.includes('carrito-styles')) {
+    document.head.insertAdjacentHTML('beforeend', estilosCarrito);
+}
+
+// Inicializar UI al cargar página
+document.addEventListener('DOMContentLoaded', () => {
+    carrito.actualizarUI();
+});
