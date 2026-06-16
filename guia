@@ -1,0 +1,396 @@
+# Guía Completa: Tienda de Repuestos de Frenos
+
+## 📋 Tabla de Contenidos
+1. [Requisitos](#requisitos)
+2. [Estructura del Proyecto](#estructura-del-proyecto)
+3. [Instalación](#instalación)
+4. [Configuración de Base de Datos](#configuración-de-base-de-datos)
+5. [Características Principales](#características-principales)
+6. [Seguridad](#seguridad)
+7. [Optimización](#optimización)
+
+---
+
+## 🔧 Requisitos
+
+### Servidor Web
+- Apache 2.4+ con módulo mod_rewrite habilitado
+- O Nginx 1.18+
+
+### Base de Datos
+- MySQL 5.7+ o MariaDB 10.3+
+
+### PHP
+- PHP 7.4+ (recomendado 8.0+)
+- Extensiones:
+  - `php-mysql` o `php-mysqli`
+  - `php-gd` (para imágenes)
+  - `php-xml` (para XML)
+
+### Front-End
+- HTML5
+- CSS3
+- JavaScript (ES6+)
+
+---
+
+## 📁 Estructura del Proyecto
+
+```
+tienda-frenos/
+│
+├── public/
+│   ├── index.html          # Página principal
+│   ├── producto.html       # Detalle de producto
+│   ├── carrito.html        # Carrito de compras
+│   ├── checkout.html       # Proceso de compra
+│   ├── css/
+│   │   ├── estilos.css
+│   │   └── responsive.css
+│   ├── js/
+│   │   ├── main.js
+│   │   ├── carrito.js
+│   │   ├── busqueda.js
+│   │   └── validacion.js
+│   └── img/
+│       ├── productos/
+│       ├── categorias/
+│       └── banners/
+│
+├── api/
+│   ├── config.php           # Configuración y conexión
+│   ├── productos.php        # Funciones de productos
+│   ├── clientes.php         # Funciones de clientes
+│   ├── ordenes.php          # Funciones de ordenes
+│   ├── search.php           # Búsqueda avanzada
+│   └── admin/
+│       ├── login.php        # Login administrador
+│       ├── dashboard.php    # Panel de control
+│       ├── productos.php    # Gestión de productos
+│       └── ordenes.php      # Gestión de ordenes
+│
+├── database/
+│   ├── base_datos.sql      # Script de creación
+│   └── datos_iniciales.sql # Datos de prueba
+│
+├── vendor/                  # Librerías externas (Composer)
+│
+├── .htaccess               # Configuración Apache
+├── .env.example            # Variables de entorno
+└── README.md               # Documentación
+```
+
+---
+
+## 🚀 Instalación
+
+### Paso 1: Preparar el Servidor
+
+```bash
+# En Linux/Mac
+mkdir tienda-frenos
+cd tienda-frenos
+
+# Crear carpetas
+mkdir public public/css public/js public/img api database vendor
+```
+
+### Paso 2: Crear la Base de Datos
+
+```sql
+-- Conectar a MySQL como root
+mysql -u root -p
+
+-- Crear la base de datos
+CREATE DATABASE tienda_frenos CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+CREATE USER 'frenos_user'@'localhost' IDENTIFIED BY 'contraseña_segura';
+GRANT ALL PRIVILEGES ON tienda_frenos.* TO 'frenos_user'@'localhost';
+FLUSH PRIVILEGES;
+
+-- Ejecutar el script SQL
+USE tienda_frenos;
+SOURCE base_datos_frenos.sql;
+```
+
+### Paso 3: Configurar Archivos
+
+```bash
+# Crear archivo de configuración
+cp .env.example .env
+
+# Editar .env con tus credenciales
+nano .env
+```
+
+**Contenido de `.env`:**
+```
+DB_HOST=localhost
+DB_USER=frenos_user
+DB_PASS=contraseña_segura
+DB_NAME=tienda_frenos
+
+SITE_URL=https://tudominio.com.mx
+ADMIN_EMAIL=admin@tudominio.com.mx
+
+PAYMENT_GATEWAY=paypal  # o stripe, conekta, etc
+API_KEY_PAGOS=tu_clave_api
+```
+
+### Paso 4: Configurar Apache (.htaccess)
+
+```apache
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /
+    
+    # No redirigir archivos reales
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    
+    # Redirigir a index.php
+    RewriteRule ^(.*)$ index.php?route=$1 [QSA,L]
+</IfModule>
+```
+
+---
+
+## 💾 Configuración de Base de Datos
+
+### Datos Iniciales Recomendados
+
+```sql
+-- Insertar más marcas
+INSERT INTO marcas_auto (nombre, descripcion) VALUES
+('Volkswagen', 'Autos Volkswagen'),
+('Nissan', 'Autos Nissan'),
+('Toyota', 'Autos Toyota'),
+('Chevrolet', 'Autos Chevrolet'),
+('Ford', 'Autos Ford'),
+('Honda', 'Autos Honda'),
+('Hyundai', 'Autos Hyundai'),
+('Kia', 'Autos Kia'),
+('Dodge', 'Autos Dodge'),
+('RAM', 'Pickups RAM');
+
+-- Insertar modelos (ejemplo)
+INSERT INTO modelos_auto (id_marca, nombre, año_desde, año_hasta) VALUES
+(1, 'Golf', 2010, 2024),
+(1, 'Jetta', 2008, 2024),
+(2, 'Versa', 2006, 2024),
+(2, 'Sentra', 2007, 2024),
+(3, 'Corolla', 2005, 2024),
+(3, 'Camry', 2010, 2024);
+
+-- Insertar productos ejemplo
+INSERT INTO productos (
+    id_categoria, 
+    nombre, 
+    descripcion,
+    especificaciones,
+    precio_compra,
+    precio_venta,
+    codigo_parte,
+    sku,
+    cantidad_stock,
+    material
+) VALUES 
+(1, 'Balatas VW Golf Delantera', 'Juego de balatas para VW Golf 2010-2023', 
+'Fricciones Semimetálicas, Espesor: 11.5mm', 180.00, 450.00, 'VW-GOLF-001', 'SKU001', 45, 'Semimetálica'),
+(1, 'Balatas Toyota Corolla Delantera', 'Juego balatas Toyota Corolla',
+'Fricciones Cerámica, Espesor: 12mm', 160.00, 420.00, 'TOY-COROLLA-001', 'SKU002', 60, 'Cerámica'),
+(2, 'Disco Nissan Versa Delantera', 'Par de discos delanteros Nissan Versa',
+'Ventilado, Diámetro: 280mm', 220.00, 580.00, 'NIS-VERSA-001', 'SKU003', 30, 'Hierro fundido'),
+(3, 'Tambor Chevrolet Aveo Trasero', 'Tambor de freno trasero Aveo',
+'Diámetro: 200mm, Par', 140.00, 320.00, 'CHE-AVEO-001', 'SKU004', 50, 'Hierro fundido');
+
+-- Insertar compatibilidades
+INSERT INTO compatibilidad_producto_modelo (id_producto, id_modelo, posicion, numero_ejes) VALUES
+(1, 1, 'Delantera', 1),  -- Balatas Golf - Eje delantero
+(2, 5, 'Delantera', 1),  -- Balatas Corolla - Eje delantero
+(3, 3, 'Delantera', 1),  -- Disco Versa - Eje delantero
+(4, 4, 'Trasera', 2);    -- Tambor Aveo - Eje trasero
+```
+
+---
+
+## ✨ Características Principales
+
+### 1. Búsqueda por Vehículo
+- Selecciona marca → Modelo → Año
+- Filtro por tipo de repuesto
+- Muestra compatibilidades automáticamente
+
+### 2. Catálogo Organizado
+- Categorías: Balatas, Discos, Tambores, Zapatas
+- Filtrado por precio
+- Ordenamiento (Relevancia, Precio, Nuevo)
+- Búsqueda por código de parte
+
+### 3. Carrito de Compras
+- Agregar/Eliminar productos
+- Actualizar cantidades
+- Guardado en localStorage
+- Resumen de precios
+
+### 4. Sistema de Pedidos
+- Registro de clientes
+- Historial de compras
+- Seguimiento de ordenes
+- Confirmación por email
+
+### 5. Panel Administrativo
+- Gestión de inventario
+- Reporte de ventas
+- Administración de clientes
+- Estadísticas
+
+---
+
+## 🔐 Seguridad
+
+### Implementaciones Críticas
+
+```php
+// 1. VALIDACIÓN DE ENTRADA
+function validar_entrada($entrada) {
+    $entrada = trim($entrada);
+    $entrada = stripslashes($entrada);
+    $entrada = htmlspecialchars($entrada);
+    return $entrada;
+}
+
+// 2. PREVENCIÓN SQL INJECTION
+// ✓ Usar prepared statements (MySQLi)
+$stmt = $conn->prepare("SELECT * FROM productos WHERE id_producto = ?");
+$stmt->bind_param("i", $id);
+$stmt->execute();
+
+// 3. HASH DE CONTRASEÑAS
+$password_hash = password_hash($password, PASSWORD_BCRYPT);
+password_verify($password, $password_hash);
+
+// 4. TOKENS CSRF
+session_start();
+if (!isset($_SESSION['csrf_token'])) {
+    $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
+}
+
+// 5. HTTPS OBLIGATORIO
+if (empty($_SERVER['HTTPS']) || $_SERVER['HTTPS'] === 'off') {
+    header('Location: https://' . $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI']);
+    exit;
+}
+```
+
+### Checklist de Seguridad
+- [ ] Cambiar permisos de carpetas sensibles (600 para configs)
+- [ ] Habilitar HTTPS con certificado SSL
+- [ ] Configurar WAF (Web Application Firewall)
+- [ ] Implementar rate limiting
+- [ ] Encriptar datos sensibles en base de datos
+- [ ] Realizar auditorías de seguridad regularmente
+
+---
+
+## ⚡ Optimización
+
+### 1. Performance
+```php
+// Usar caché
+$cache_key = 'productos_' . md5($sql);
+if (apcu_exists($cache_key)) {
+    return apcu_fetch($cache_key);
+}
+
+// Resultado
+apcu_store($cache_key, $resultado, 3600); // 1 hora
+```
+
+### 2. Base de Datos
+```sql
+-- Crear índices
+CREATE INDEX idx_producto_categoria ON productos(id_categoria);
+CREATE INDEX idx_orden_cliente ON ordenes(id_cliente);
+CREATE INDEX idx_compatibilidad ON compatibilidad_producto_modelo(id_producto, id_modelo);
+
+-- Analizar tablas
+ANALYZE TABLE productos;
+OPTIMIZE TABLE productos;
+```
+
+### 3. Front-End
+```html
+<!-- Minificar CSS/JS -->
+<script src="js/main.min.js"></script>
+<link rel="stylesheet" href="css/styles.min.css">
+
+<!-- Lazy loading -->
+<img src="imagen.jpg" loading="lazy" alt="Producto">
+
+<!-- Preload recursos críticos -->
+<link rel="preload" as="script" href="main.js">
+```
+
+### 4. Imágenes
+- Usar formatos modernos (WebP)
+- Comprimir sin perder calidad
+- Responsive images (srcset)
+- CDN para entrega rápida
+
+---
+
+## 📱 Funcionalidades por Implementar
+
+### Fase 1 (MVP)
+- [x] Catálogo de productos
+- [x] Búsqueda por vehículo
+- [x] Carrito básico
+- [ ] Registro de clientes
+- [ ] Checkout simple
+
+### Fase 2
+- [ ] Pasarela de pago (PayPal/Stripe)
+- [ ] Seguimiento de ordenes
+- [ ] Sistema de reseñas
+- [ ] Wishlist
+- [ ] Comparador de productos
+
+### Fase 3
+- [ ] Panel administrativo completo
+- [ ] Integración ERP
+- [ ] Chat en vivo
+- [ ] Búsqueda por imagen
+- [ ] App móvil
+
+---
+
+## 📞 Soporte y Mantenimiento
+
+### Tareas Regulares
+- Backup diario de base de datos
+- Monitoreo de performance
+- Actualización de inventario
+- Limpieza de logs
+- Actualizaciones de seguridad
+
+### Contacto de Soporte
+- Email: soporte@tienda.com
+- WhatsApp: +52 55 1234 5678
+- Horario: Lun-Vie 9:00-18:00 CDT
+
+---
+
+## 🎯 Próximos Pasos
+
+1. **Instalar la base de datos** con el script SQL
+2. **Configurar Apache** con los archivos .htaccess
+3. **Subir archivos** al servidor
+4. **Crear cuenta admin** en la base de datos
+5. **Probar funcionalidades** en ambiente local
+6. **Ir a producción** con HTTPS activado
+
+---
+
+**Versión:** 1.0  
+**Última actualización:** 2024  
+**Mantenido por:** Equipo de desarrollo
